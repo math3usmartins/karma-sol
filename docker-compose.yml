@@ -1,0 +1,15 @@
+version: '2.2'
+
+services:
+  karma:
+    build:
+      context: .docker/
+    working_dir: /opt/karma
+    volumes:
+      - ./:/opt/karma
+      - cargo:/usr/local/cargo
+      - solana:/home/karma/.config/solana
+
+volumes:
+  cargo: ~
+  solana: ~
