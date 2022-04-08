@@ -14,6 +14,8 @@ pub mod karma {
         let karma = &mut ctx.accounts.karma;
         karma.authority = authority;
         karma.balance = 0;
+        karma.sunrise = Clock::get().unwrap().unix_timestamp;
+        karma.energy = ENERGY_PER_SUNRISE;
 
         Ok(())
     }
@@ -37,16 +39,45 @@ pub mod karma {
 
         Ok(())
     }
+
+    pub fn sunrise(ctx: Context<Sunrise>) -> Result<()> {
+        let karma = &mut ctx.accounts.karma;
+
+        if seconds_since_last_sunrise(karma.sunrise) < SECONDS_PER_DAY {
+            // Sunrise not possible until 24h since last one
+            return Ok(());
+        }
+
+        karma.sunrise = Clock::get().unwrap().unix_timestamp;
+        karma.energy = ENERGY_PER_SUNRISE;
+
+        Ok(())
+    }
+}
+
+fn seconds_since_last_sunrise(last_sunrise: i64) -> i64 {
+    return Clock::get().unwrap().unix_timestamp - last_sunrise;
 }
 
 // interactions affect both sides in the same way
 fn register_interaction(
     value: i64,
-    one_karma: &mut Karma,
-    another_one: &mut Karma,
+    reported: &mut Karma,
+    reporter: &mut Karma,
 ) {
-    one_karma.balance += value;
-    another_one.balance += value;
+    if reporter.energy <= 0 {
+        return;
+    }
+
+    if seconds_since_last_sunrise(reporter.sunrise) > SECONDS_PER_DAY {
+        // Sunrise is required prior to any active interactions
+        return;
+    }
+
+    reporter.energy -= ENERGY_PER_INTERACTION;
+
+    reported.balance += value;
+    reporter.balance += value;
 }
 
 #[derive(Accounts)]
@@ -81,12 +112,27 @@ pub struct Interaction<'info> {
     pub reporter: Account<'info, Karma>,
 }
 
+const ENERGY_PER_SUNRISE: u16 = 2400;
+const ENERGY_PER_INTERACTION: u16 = 100;
+const SECONDS_PER_DAY: i64 = 86400;
+
 #[account]
-pub struct Karma {
-    pub balance: i64,       // 8 bytes
-    pub authority: Pubkey,  // 32 bytes
+pub struct Karma {         // 50 bytes total
+    pub authority: Pubkey, // 32 bytes
+    pub balance: i64,      // 8 bytes
+    pub energy: u16,       // 2 bytes
+    pub sunrise: i64,      // 8 bytes
 }
 
 impl Karma {
-    const DATA_SIZE: usize = 40;
+    const DATA_SIZE: usize = 50;
+}
+
+#[derive(Accounts)]
+pub struct Sunrise<'info> {
+    #[account(
+        mut,
+        signer,
+    )]
+    pub karma: Account<'info, Karma>,
 }

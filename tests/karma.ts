@@ -23,10 +23,56 @@ describe("karma", () => {
 
     await create(karma);
 
-    let reportedAccount = await program.account.karma.fetch(karma.publicKey);
+    let createdKarma = await program.account.karma.fetch(karma.publicKey);
 
-    assert.ok(reportedAccount.authority.equals(provider.wallet.publicKey));
-    assert.equal(reportedAccount.balance.toNumber(), 0);
+    assert.ok(createdKarma.authority.equals(provider.wallet.publicKey));
+    assert.equal(createdKarma.balance.toNumber(), 0);
+    assert.equal(createdKarma.energy, 2400);
+    assert.equal(createdKarma.sunrise.toNumber() > 0, true);
+  });
+
+  it("ignores sunrise ahead of time", async () => {
+    const reported = anchor.web3.Keypair.generate();
+    const reporter = anchor.web3.Keypair.generate();
+
+    await Promise.all([
+      create(reported),
+      create(reporter),
+    ]);
+
+    let accounts = await Promise.all([
+      program.account.karma.fetch(reported.publicKey),
+      program.account.karma.fetch(reporter.publicKey),
+    ]);
+
+    const initialSunrise = accounts[1].sunrise.toNumber();
+
+    assert.equal(accounts[1].energy, 2400);
+
+    await good(reported, reporter);
+
+    accounts = await Promise.all([
+      program.account.karma.fetch(reported.publicKey),
+      program.account.karma.fetch(reporter.publicKey),
+    ]);
+
+    assert.equal(accounts[1].energy, 2300);
+
+    await program.rpc.sunrise({
+      accounts: {
+        karma: reporter.publicKey,
+      },
+      signers: [reporter],
+    });
+
+    await program.account.karma.fetch(reporter.publicKey).then(
+      account => {
+        // sunrise MUST NOT have changed!
+        assert.equal(account.sunrise.toNumber(), initialSunrise);
+        // energy MUST NOT have changed either
+        assert.equal(account.energy, 2300);
+      }
+    )
   });
 
   it("requires valid signer to create karma", async () => {
@@ -65,6 +111,12 @@ describe("karma", () => {
 
     assert.equal(accounts[0].balance.toNumber(), 1);
     assert.equal(accounts[1].balance.toNumber(), 1);
+
+    // active interaction MUST consume some energy: -100 joules
+    assert.equal(accounts[1].energy.valueOf(), 2300);
+
+    // passive interaction MUST NOT consume any energy.
+    assert.equal(accounts[0].energy.valueOf(), 2400);
   });
 
   it("counts bad interaction", async () => {
@@ -114,6 +166,80 @@ describe("karma", () => {
 
     // this one had two good interactions
     assert.equal(accounts[2].balance.toNumber(), 2);
+
+    // active interaction MUST consume some energy: 2400 - 200 = 2200
+    assert.equal(accounts[2].energy.valueOf(), 2200);
+  });
+
+  it("ignores interaction when energy is not sufficient", async () => {
+    const karma = anchor.web3.Keypair.generate();
+    const others = Array.from(Array(24)).map(() => anchor.web3.Keypair.generate());
+
+    await Promise.all(
+      others.map((other) => create(other))
+        .concat([
+          create(karma)
+        ])
+    );
+
+    await Promise.all(
+      others.map(
+        (other) => program.account.karma.fetch(other.publicKey).then(
+          account => {
+            // accounts created with zeroed balance and 2400 joules
+            assert.equal(account.balance.toNumber(), 0);
+            assert.equal(account.energy, 2400);
+          }
+        )
+      )
+    );
+
+    await Promise.all(
+      others.map((other) => good(other, karma))
+    );
+
+    await Promise.all(
+      others.map(
+        (other) => program.account.karma.fetch(other.publicKey)
+          .then( account => {
+            // other accounts balance MUST have changed
+            assert.equal(account.balance.toNumber(), 1);
+            // .. but their energy MUST NOT have changed, because they were in passive mode.
+            assert.equal(account.energy, 2400);
+          })
+      )
+    );
+
+    await program.account.karma.fetch(karma.publicKey).then(
+      account => {
+        // active karma's energy MUST be empty now after 24 active interactions.
+        assert.equal(account.energy, 0);
+      }
+    )
+
+    // ... and another interaction MUST NOT cause any changes
+    await good(others[0], karma)
+
+    await Promise.all([
+      program.account.karma.fetch(others[0].publicKey).then(
+        account => {
+          // passive karma's energy MUST NOT change
+          assert.equal(account.energy, 2400);
+
+          // balance MUST NOT change either, because interaction MUST have been ignored.
+          assert.equal(account.balance.toNumber(), 1);
+        }
+      ),
+      program.account.karma.fetch(karma.publicKey).then(
+        account => {
+          // balance MUST NOT change...
+          assert.equal(account.balance.toNumber(), 24);
+
+          // ... energy MUST NOT change either!
+          assert.equal(account.energy, 0);
+        }
+      )
+    ]);
   });
 
   it("requires valid signature for good interaction", async () => {
