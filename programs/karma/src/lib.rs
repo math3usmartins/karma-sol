@@ -87,7 +87,6 @@ pub struct Create<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + Karma::DATA_SIZE,
     )]
     pub karma: Account<'info, Karma>,
 
@@ -117,15 +116,11 @@ const SECONDS_PER_DAY: i64 = 86400;
 
 #[account]
 #[derive(Default)]
-pub struct Karma {         // 50 bytes total
-    pub authority: Pubkey, // 32 bytes
-    pub balance: i64,      // 8 bytes
-    pub energy: u16,       // 2 bytes
-    pub sunrise: i64,      // 8 bytes
-}
-
-impl Karma {
-    const DATA_SIZE: usize = 50;
+pub struct Karma {
+    pub authority: Pubkey,
+    pub balance: i64,
+    pub energy: u16,
+    pub sunrise: i64,
 }
 
 #[derive(Accounts)]
