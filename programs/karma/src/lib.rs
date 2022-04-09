@@ -13,7 +13,6 @@ pub mod karma {
     pub fn create(ctx: Context<Create>, authority: Pubkey) -> Result<()> {
         let karma = &mut ctx.accounts.karma;
         karma.authority = authority;
-        karma.balance = 0;
         karma.sunrise = Clock::get().unwrap().unix_timestamp;
         karma.energy = ENERGY_PER_SUNRISE;
 
@@ -117,6 +116,7 @@ const ENERGY_PER_INTERACTION: u16 = 100;
 const SECONDS_PER_DAY: i64 = 86400;
 
 #[account]
+#[derive(Default)]
 pub struct Karma {         // 50 bytes total
     pub authority: Pubkey, // 32 bytes
     pub balance: i64,      // 8 bytes
