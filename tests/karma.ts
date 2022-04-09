@@ -19,11 +19,11 @@ describe("karma", () => {
   });
 
   it("creates neutral karma", async () => {
-    const karma = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
 
-    await create(karma);
+    await create(soul);
 
-    let createdKarma = await program.account.soul.fetch(karma.publicKey);
+    let createdKarma = await program.account.soul.fetch(soul.publicKey);
 
     assert.ok(createdKarma.authority.equals(provider.wallet.publicKey));
     assert.equal(createdKarma.karma.toNumber(), 0);
@@ -32,40 +32,40 @@ describe("karma", () => {
   });
 
   it("ignores sunrise ahead of time", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
+    const anotherSoul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
+      create(anotherSoul),
+      create(soul),
     ]);
 
     let accounts = await Promise.all([
-      program.account.soul.fetch(reported.publicKey),
-      program.account.soul.fetch(reporter.publicKey),
+      program.account.soul.fetch(anotherSoul.publicKey),
+      program.account.soul.fetch(soul.publicKey),
     ]);
 
     const initialSunrise = accounts[1].sunrise.toNumber();
 
     assert.equal(accounts[1].energy, 2400);
 
-    await good(reported, reporter);
+    await praise(anotherSoul, soul);
 
     accounts = await Promise.all([
-      program.account.soul.fetch(reported.publicKey),
-      program.account.soul.fetch(reporter.publicKey),
+      program.account.soul.fetch(anotherSoul.publicKey),
+      program.account.soul.fetch(soul.publicKey),
     ]);
 
     assert.equal(accounts[1].energy, 2300);
 
     await program.rpc.sunrise({
       accounts: {
-        soul: reporter.publicKey,
+        soul: soul.publicKey,
       },
-      signers: [reporter],
+      signers: [soul],
     });
 
-    await program.account.soul.fetch(reporter.publicKey).then(
+    await program.account.soul.fetch(soul.publicKey).then(
       account => {
         // sunrise MUST NOT have changed!
         assert.equal(account.sunrise.toNumber(), initialSunrise);
@@ -76,16 +76,16 @@ describe("karma", () => {
   });
 
   it("requires valid signer to create karma", async () => {
-    const karma = anchor.web3.Keypair.generate();
-    const anotherKarma = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
+    const anotherSoul = anchor.web3.Keypair.generate();
 
     await program.rpc.create(provider.wallet.publicKey, {
       accounts: {
-        soul: karma.publicKey,
+        soul: soul.publicKey,
         authority: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
       },
-      signers: [anotherKarma],
+      signers: [anotherSoul],
     }).then(() => {
       assert.fail('ERR: this was expected to fail!');
     }).catch(() => {
@@ -94,19 +94,19 @@ describe("karma", () => {
   });
 
   it("counts good interaction", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
+    const anotherSoul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
+      create(anotherSoul),
+      create(soul),
     ]);
 
-    await good(reported, reporter);
+    await praise(anotherSoul, soul);
 
     const accounts = await Promise.all([
-      program.account.soul.fetch(reported.publicKey),
-      program.account.soul.fetch(reporter.publicKey),
+      program.account.soul.fetch(anotherSoul.publicKey),
+      program.account.soul.fetch(soul.publicKey),
     ]);
 
     assert.equal(accounts[0].karma.toNumber(), 1);
@@ -120,19 +120,19 @@ describe("karma", () => {
   });
 
   it("counts bad interaction", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
+    const anotherSoul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
+      create(anotherSoul),
+      create(soul),
     ]);
 
-    await bad(reported, reporter);
+    await accuse(anotherSoul, soul);
 
     const accounts = await Promise.all([
-      program.account.soul.fetch(reported.publicKey),
-      program.account.soul.fetch(reporter.publicKey),
+      program.account.soul.fetch(anotherSoul.publicKey),
+      program.account.soul.fetch(soul.publicKey),
     ]);
 
     assert.equal(accounts[0].karma.toNumber(), -1);
@@ -140,25 +140,25 @@ describe("karma", () => {
   });
 
   it("accumulates interactions", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
-    const anotherKarma = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
+    const anotherSoul = anchor.web3.Keypair.generate();
+    const yetAnotherSoul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
-      create(anotherKarma),
+      create(anotherSoul),
+      create(soul),
+      create(yetAnotherSoul),
     ]);
 
     await Promise.all([
-      good(reported, reporter),
-      good(anotherKarma, reporter),
+      praise(anotherSoul, soul),
+      praise(yetAnotherSoul, soul),
     ]);
 
     const accounts = await Promise.all([
-      program.account.soul.fetch(reported.publicKey),
-      program.account.soul.fetch(anotherKarma.publicKey),
-      program.account.soul.fetch(reporter.publicKey),
+      program.account.soul.fetch(anotherSoul.publicKey),
+      program.account.soul.fetch(yetAnotherSoul.publicKey),
+      program.account.soul.fetch(soul.publicKey),
     ]);
 
     assert.equal(accounts[0].karma.toNumber(), 1);
@@ -172,19 +172,16 @@ describe("karma", () => {
   });
 
   it("ignores interaction when energy is not sufficient", async () => {
-    const karma = anchor.web3.Keypair.generate();
-    const others = Array.from(Array(24)).map(() => anchor.web3.Keypair.generate());
+    const soul = anchor.web3.Keypair.generate();
+    const otherSouls = Array.from(Array(24)).map(() => anchor.web3.Keypair.generate());
 
     await Promise.all(
-      others.map((other) => create(other))
-        .concat([
-          create(karma)
-        ])
+      otherSouls.concat([soul]).map(soul => create(soul))
     );
 
     await Promise.all(
-      others.map(
-        (other) => program.account.soul.fetch(other.publicKey).then(
+      otherSouls.map(
+        anotherSoul => program.account.soul.fetch(anotherSoul.publicKey).then(
           account => {
             // accounts created with zeroed balance and 2400 joules
             assert.equal(account.karma.toNumber(), 0);
@@ -195,22 +192,22 @@ describe("karma", () => {
     );
 
     await Promise.all(
-      others.map((other) => good(other, karma))
+      otherSouls.map(anotherSoul => praise(anotherSoul, soul))
     );
 
     await Promise.all(
-      others.map(
-        (other) => program.account.soul.fetch(other.publicKey)
-          .then( account => {
+      otherSouls.map(
+        anotherSoul => program.account.soul.fetch(anotherSoul.publicKey)
+          .then(account => {
             // other accounts balance MUST have changed
             assert.equal(account.karma.toNumber(), 1);
-            // .. but their energy MUST NOT have changed, because they were in passive mode.
+            // ... but their energy MUST NOT have changed, because they were in passive mode.
             assert.equal(account.energy, 2400);
           })
       )
     );
 
-    await program.account.soul.fetch(karma.publicKey).then(
+    await program.account.soul.fetch(soul.publicKey).then(
       account => {
         // active karma's energy MUST be empty now after 24 active interactions.
         assert.equal(account.energy, 0);
@@ -218,10 +215,10 @@ describe("karma", () => {
     )
 
     // ... and another interaction MUST NOT cause any changes
-    await good(others[0], karma)
+    await praise(otherSouls[0], soul)
 
     await Promise.all([
-      program.account.soul.fetch(others[0].publicKey).then(
+      program.account.soul.fetch(otherSouls[0].publicKey).then(
         account => {
           // passive karma's energy MUST NOT change
           assert.equal(account.energy, 2400);
@@ -230,98 +227,96 @@ describe("karma", () => {
           assert.equal(account.karma.toNumber(), 1);
         }
       ),
-      program.account.soul.fetch(karma.publicKey).then(
+      program.account.soul.fetch(soul.publicKey).then(
         account => {
-          // balance MUST NOT change...
-          assert.equal(account.karma.toNumber(), 24);
-
-          // ... energy MUST NOT change either!
+          // energy and balance MUST NOT change...
           assert.equal(account.energy, 0);
+          assert.equal(account.karma.toNumber(), 24);
         }
       )
     ]);
   });
 
-  it("requires valid signature for good interaction", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
+  it("requires valid signature to praise another soul", async () => {
+    const anotherSoul = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
+      create(anotherSoul),
+      create(soul),
     ]);
 
-    await program.rpc.good({
+    await program.rpc.praise({
       accounts: {
-        reported: reported.publicKey,
-        reporter: reporter.publicKey,
+        anotherSoul: anotherSoul.publicKey,
+        soul: soul.publicKey,
       },
-      signers: [reported],
+      signers: [anotherSoul],
     }).then(() => {
       assert.fail('ERR: this was expected to fail!');
     }).catch(async () => {
       const accounts = await Promise.all([
-        program.account.soul.fetch(reported.publicKey),
-        program.account.soul.fetch(reporter.publicKey),
+        program.account.soul.fetch(anotherSoul.publicKey),
+        program.account.soul.fetch(soul.publicKey),
       ]);
 
-      // reported karma MUST remain zeroed
+      // anotherSoul karma MUST remain zeroed
       assert.equal(accounts[0].karma.toNumber(), 0);
 
-      // reporter karma MUST remain zeroed
+      // soul karma MUST remain zeroed
       assert.equal(accounts[1].karma.toNumber(), 0);
     });
   });
 
-  it("requires valid signature for bad interaction", async () => {
-    const reported = anchor.web3.Keypair.generate();
-    const reporter = anchor.web3.Keypair.generate();
+  it("requires valid signature to accuse another soul", async () => {
+    const anotherSoul = anchor.web3.Keypair.generate();
+    const soul = anchor.web3.Keypair.generate();
 
     await Promise.all([
-      create(reported),
-      create(reporter),
+      create(anotherSoul),
+      create(soul),
     ]);
 
-    await program.rpc.bad({
+    await program.rpc.accuse({
       accounts: {
-        reported: reported.publicKey,
-        reporter: reporter.publicKey,
+        anotherSoul: anotherSoul.publicKey,
+        soul: soul.publicKey,
       },
-      signers: [reported],
+      signers: [anotherSoul],
     }).then(() => {
       assert.fail('ERR: this was expected to fail!');
     }).catch(async () => {
       const accounts = await Promise.all([
-        program.account.soul.fetch(reported.publicKey),
-        program.account.soul.fetch(reporter.publicKey),
+        program.account.soul.fetch(anotherSoul.publicKey),
+        program.account.soul.fetch(soul.publicKey),
       ]);
 
-      // reported karma MUST remain zeroed
+      // anotherSoul karma MUST remain zeroed
       assert.equal(accounts[0].karma.toNumber(), 0);
 
-      // reporter karma MUST remain zeroed
+      // soul karma MUST remain zeroed
       assert.equal(accounts[1].karma.toNumber(), 0);
     });
   });
 });
 
-async function good(reported: anchor.web3.Keypair, reporter: anchor.web3.Keypair) {
-  await program.rpc.good({
+async function praise(anotherSoul: anchor.web3.Keypair, soul: anchor.web3.Keypair) {
+  await program.rpc.praise({
     accounts: {
-      reported: reported.publicKey,
-      reporter: reporter.publicKey,
+      anotherSoul: anotherSoul.publicKey,
+      soul: soul.publicKey,
     },
-    signers: [reporter],
+    signers: [soul],
   });
 }
 
-async function bad(reported: anchor.web3.Keypair, reporter: anchor.web3.Keypair) {
-  await program.rpc.bad({
+async function accuse(anotherSoul: anchor.web3.Keypair, soul: anchor.web3.Keypair) {
+  await program.rpc.accuse({
     accounts: {
-      reported: reported.publicKey,
-      reporter: reporter.publicKey,
+      anotherSoul: anotherSoul.publicKey,
+      soul: soul.publicKey,
     },
-    signers: [reporter],
+    signers: [soul],
   });
 }
 

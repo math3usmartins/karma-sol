@@ -19,21 +19,21 @@ pub mod karma {
         Ok(())
     }
 
-    pub fn good(ctx: Context<Interaction>) -> Result<()> {
+    pub fn praise(ctx: Context<Interaction>) -> Result<()> {
         register_interaction(
             1,
-            &mut ctx.accounts.reported,
-            &mut ctx.accounts.reporter,
+            &mut ctx.accounts.another_soul,
+            &mut ctx.accounts.soul,
         );
 
         Ok(())
     }
 
-    pub fn bad(ctx: Context<Interaction>) -> Result<()> {
+    pub fn accuse(ctx: Context<Interaction>) -> Result<()> {
         register_interaction(
             -1,
-            &mut ctx.accounts.reported,
-            &mut ctx.accounts.reporter,
+            &mut ctx.accounts.another_soul,
+            &mut ctx.accounts.soul,
         );
 
         Ok(())
@@ -62,22 +62,22 @@ fn seconds_since_last_sunrise(last_sunrise: i64) -> i64 {
 // but only active soul's energy is consumed.
 fn register_interaction(
     value: i64,
-    passive_soul: &mut Soul,
-    active_soul: &mut Soul,
+    another_soul: &mut Soul,
+    soul: &mut Soul,
 ) {
-    if active_soul.energy <= 0 {
+    if soul.energy <= 0 {
         return;
     }
 
-    if seconds_since_last_sunrise(active_soul.sunrise) > SECONDS_PER_DAY {
+    if seconds_since_last_sunrise(soul.sunrise) > SECONDS_PER_DAY {
         // Sunrise is required prior to any active interactions
         return;
     }
 
-    active_soul.energy -= ENERGY_PER_INTERACTION;
+    soul.energy -= ENERGY_PER_INTERACTION;
 
-    passive_soul.karma += value;
-    active_soul.karma += value;
+    another_soul.karma += value;
+    soul.karma += value;
 }
 
 #[derive(Accounts)]
@@ -102,13 +102,13 @@ pub struct Interaction<'info> {
     #[account(
         mut,
     )]
-    pub reported: Account<'info, Soul>,
+    pub another_soul: Account<'info, Soul>,
 
     #[account(
         mut,
         signer,
     )]
-    pub reporter: Account<'info, Soul>,
+    pub soul: Account<'info, Soul>,
 }
 
 const ENERGY_PER_SUNRISE: u16 = 2400;
