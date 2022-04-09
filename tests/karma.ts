@@ -23,10 +23,10 @@ describe("karma", () => {
 
     await create(karma);
 
-    let createdKarma = await program.account.karma.fetch(karma.publicKey);
+    let createdKarma = await program.account.soul.fetch(karma.publicKey);
 
     assert.ok(createdKarma.authority.equals(provider.wallet.publicKey));
-    assert.equal(createdKarma.balance.toNumber(), 0);
+    assert.equal(createdKarma.karma.toNumber(), 0);
     assert.equal(createdKarma.energy, 2400);
     assert.equal(createdKarma.sunrise.toNumber() > 0, true);
   });
@@ -41,8 +41,8 @@ describe("karma", () => {
     ]);
 
     let accounts = await Promise.all([
-      program.account.karma.fetch(reported.publicKey),
-      program.account.karma.fetch(reporter.publicKey),
+      program.account.soul.fetch(reported.publicKey),
+      program.account.soul.fetch(reporter.publicKey),
     ]);
 
     const initialSunrise = accounts[1].sunrise.toNumber();
@@ -52,20 +52,20 @@ describe("karma", () => {
     await good(reported, reporter);
 
     accounts = await Promise.all([
-      program.account.karma.fetch(reported.publicKey),
-      program.account.karma.fetch(reporter.publicKey),
+      program.account.soul.fetch(reported.publicKey),
+      program.account.soul.fetch(reporter.publicKey),
     ]);
 
     assert.equal(accounts[1].energy, 2300);
 
     await program.rpc.sunrise({
       accounts: {
-        karma: reporter.publicKey,
+        soul: reporter.publicKey,
       },
       signers: [reporter],
     });
 
-    await program.account.karma.fetch(reporter.publicKey).then(
+    await program.account.soul.fetch(reporter.publicKey).then(
       account => {
         // sunrise MUST NOT have changed!
         assert.equal(account.sunrise.toNumber(), initialSunrise);
@@ -81,7 +81,7 @@ describe("karma", () => {
 
     await program.rpc.create(provider.wallet.publicKey, {
       accounts: {
-        karma: karma.publicKey,
+        soul: karma.publicKey,
         authority: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
       },
@@ -105,12 +105,12 @@ describe("karma", () => {
     await good(reported, reporter);
 
     const accounts = await Promise.all([
-      program.account.karma.fetch(reported.publicKey),
-      program.account.karma.fetch(reporter.publicKey),
+      program.account.soul.fetch(reported.publicKey),
+      program.account.soul.fetch(reporter.publicKey),
     ]);
 
-    assert.equal(accounts[0].balance.toNumber(), 1);
-    assert.equal(accounts[1].balance.toNumber(), 1);
+    assert.equal(accounts[0].karma.toNumber(), 1);
+    assert.equal(accounts[1].karma.toNumber(), 1);
 
     // active interaction MUST consume some energy: -100 joules
     assert.equal(accounts[1].energy.valueOf(), 2300);
@@ -131,12 +131,12 @@ describe("karma", () => {
     await bad(reported, reporter);
 
     const accounts = await Promise.all([
-      program.account.karma.fetch(reported.publicKey),
-      program.account.karma.fetch(reporter.publicKey),
+      program.account.soul.fetch(reported.publicKey),
+      program.account.soul.fetch(reporter.publicKey),
     ]);
 
-    assert.equal(accounts[0].balance.toNumber(), -1);
-    assert.equal(accounts[1].balance.toNumber(), -1);
+    assert.equal(accounts[0].karma.toNumber(), -1);
+    assert.equal(accounts[1].karma.toNumber(), -1);
   });
 
   it("accumulates interactions", async () => {
@@ -156,16 +156,16 @@ describe("karma", () => {
     ]);
 
     const accounts = await Promise.all([
-      program.account.karma.fetch(reported.publicKey),
-      program.account.karma.fetch(anotherKarma.publicKey),
-      program.account.karma.fetch(reporter.publicKey),
+      program.account.soul.fetch(reported.publicKey),
+      program.account.soul.fetch(anotherKarma.publicKey),
+      program.account.soul.fetch(reporter.publicKey),
     ]);
 
-    assert.equal(accounts[0].balance.toNumber(), 1);
-    assert.equal(accounts[1].balance.toNumber(), 1);
+    assert.equal(accounts[0].karma.toNumber(), 1);
+    assert.equal(accounts[1].karma.toNumber(), 1);
 
     // this one had two good interactions
-    assert.equal(accounts[2].balance.toNumber(), 2);
+    assert.equal(accounts[2].karma.toNumber(), 2);
 
     // active interaction MUST consume some energy: 2400 - 200 = 2200
     assert.equal(accounts[2].energy.valueOf(), 2200);
@@ -184,10 +184,10 @@ describe("karma", () => {
 
     await Promise.all(
       others.map(
-        (other) => program.account.karma.fetch(other.publicKey).then(
+        (other) => program.account.soul.fetch(other.publicKey).then(
           account => {
             // accounts created with zeroed balance and 2400 joules
-            assert.equal(account.balance.toNumber(), 0);
+            assert.equal(account.karma.toNumber(), 0);
             assert.equal(account.energy, 2400);
           }
         )
@@ -200,17 +200,17 @@ describe("karma", () => {
 
     await Promise.all(
       others.map(
-        (other) => program.account.karma.fetch(other.publicKey)
+        (other) => program.account.soul.fetch(other.publicKey)
           .then( account => {
             // other accounts balance MUST have changed
-            assert.equal(account.balance.toNumber(), 1);
+            assert.equal(account.karma.toNumber(), 1);
             // .. but their energy MUST NOT have changed, because they were in passive mode.
             assert.equal(account.energy, 2400);
           })
       )
     );
 
-    await program.account.karma.fetch(karma.publicKey).then(
+    await program.account.soul.fetch(karma.publicKey).then(
       account => {
         // active karma's energy MUST be empty now after 24 active interactions.
         assert.equal(account.energy, 0);
@@ -221,19 +221,19 @@ describe("karma", () => {
     await good(others[0], karma)
 
     await Promise.all([
-      program.account.karma.fetch(others[0].publicKey).then(
+      program.account.soul.fetch(others[0].publicKey).then(
         account => {
           // passive karma's energy MUST NOT change
           assert.equal(account.energy, 2400);
 
           // balance MUST NOT change either, because interaction MUST have been ignored.
-          assert.equal(account.balance.toNumber(), 1);
+          assert.equal(account.karma.toNumber(), 1);
         }
       ),
-      program.account.karma.fetch(karma.publicKey).then(
+      program.account.soul.fetch(karma.publicKey).then(
         account => {
           // balance MUST NOT change...
-          assert.equal(account.balance.toNumber(), 24);
+          assert.equal(account.karma.toNumber(), 24);
 
           // ... energy MUST NOT change either!
           assert.equal(account.energy, 0);
@@ -261,15 +261,15 @@ describe("karma", () => {
       assert.fail('ERR: this was expected to fail!');
     }).catch(async () => {
       const accounts = await Promise.all([
-        program.account.karma.fetch(reported.publicKey),
-        program.account.karma.fetch(reporter.publicKey),
+        program.account.soul.fetch(reported.publicKey),
+        program.account.soul.fetch(reporter.publicKey),
       ]);
 
       // reported karma MUST remain zeroed
-      assert.equal(accounts[0].balance.toNumber(), 0);
+      assert.equal(accounts[0].karma.toNumber(), 0);
 
       // reporter karma MUST remain zeroed
-      assert.equal(accounts[1].balance.toNumber(), 0);
+      assert.equal(accounts[1].karma.toNumber(), 0);
     });
   });
 
@@ -292,15 +292,15 @@ describe("karma", () => {
       assert.fail('ERR: this was expected to fail!');
     }).catch(async () => {
       const accounts = await Promise.all([
-        program.account.karma.fetch(reported.publicKey),
-        program.account.karma.fetch(reporter.publicKey),
+        program.account.soul.fetch(reported.publicKey),
+        program.account.soul.fetch(reporter.publicKey),
       ]);
 
       // reported karma MUST remain zeroed
-      assert.equal(accounts[0].balance.toNumber(), 0);
+      assert.equal(accounts[0].karma.toNumber(), 0);
 
       // reporter karma MUST remain zeroed
-      assert.equal(accounts[1].balance.toNumber(), 0);
+      assert.equal(accounts[1].karma.toNumber(), 0);
     });
   });
 });
@@ -325,13 +325,13 @@ async function bad(reported: anchor.web3.Keypair, reporter: anchor.web3.Keypair)
   });
 }
 
-function create(karma: anchor.web3.Keypair) {
+function create(soul: anchor.web3.Keypair) {
   return program.rpc.create(provider.wallet.publicKey, {
     accounts: {
-      karma: karma.publicKey,
+      soul: soul.publicKey,
       authority: provider.wallet.publicKey,
       systemProgram: SystemProgram.programId,
     },
-    signers: [karma],
+    signers: [soul],
   });
 }

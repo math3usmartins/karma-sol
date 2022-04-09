@@ -11,10 +11,10 @@ pub mod karma {
     }
 
     pub fn create(ctx: Context<Create>, authority: Pubkey) -> Result<()> {
-        let karma = &mut ctx.accounts.karma;
-        karma.authority = authority;
-        karma.sunrise = Clock::get().unwrap().unix_timestamp;
-        karma.energy = ENERGY_PER_SUNRISE;
+        let soul = &mut ctx.accounts.soul;
+        soul.authority = authority;
+        soul.sunrise = Clock::get().unwrap().unix_timestamp;
+        soul.energy = ENERGY_PER_SUNRISE;
 
         Ok(())
     }
@@ -40,15 +40,15 @@ pub mod karma {
     }
 
     pub fn sunrise(ctx: Context<Sunrise>) -> Result<()> {
-        let karma = &mut ctx.accounts.karma;
+        let soul = &mut ctx.accounts.soul;
 
-        if seconds_since_last_sunrise(karma.sunrise) < SECONDS_PER_DAY {
+        if seconds_since_last_sunrise(soul.sunrise) < SECONDS_PER_DAY {
             // Sunrise not possible until 24h since last one
             return Ok(());
         }
 
-        karma.sunrise = Clock::get().unwrap().unix_timestamp;
-        karma.energy = ENERGY_PER_SUNRISE;
+        soul.sunrise = Clock::get().unwrap().unix_timestamp;
+        soul.energy = ENERGY_PER_SUNRISE;
 
         Ok(())
     }
@@ -58,25 +58,26 @@ fn seconds_since_last_sunrise(last_sunrise: i64) -> i64 {
     return Clock::get().unwrap().unix_timestamp - last_sunrise;
 }
 
-// interactions affect both sides in the same way
+// interactions affect both sides in the same way,
+// but only active soul's energy is consumed.
 fn register_interaction(
     value: i64,
-    reported: &mut Karma,
-    reporter: &mut Karma,
+    passive_soul: &mut Soul,
+    active_soul: &mut Soul,
 ) {
-    if reporter.energy <= 0 {
+    if active_soul.energy <= 0 {
         return;
     }
 
-    if seconds_since_last_sunrise(reporter.sunrise) > SECONDS_PER_DAY {
+    if seconds_since_last_sunrise(active_soul.sunrise) > SECONDS_PER_DAY {
         // Sunrise is required prior to any active interactions
         return;
     }
 
-    reporter.energy -= ENERGY_PER_INTERACTION;
+    active_soul.energy -= ENERGY_PER_INTERACTION;
 
-    reported.balance += value;
-    reporter.balance += value;
+    passive_soul.karma += value;
+    active_soul.karma += value;
 }
 
 #[derive(Accounts)]
@@ -88,7 +89,7 @@ pub struct Create<'info> {
         init,
         payer = authority,
     )]
-    pub karma: Account<'info, Karma>,
+    pub soul: Account<'info, Soul>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -101,13 +102,13 @@ pub struct Interaction<'info> {
     #[account(
         mut,
     )]
-    pub reported: Account<'info, Karma>,
+    pub reported: Account<'info, Soul>,
 
     #[account(
         mut,
         signer,
     )]
-    pub reporter: Account<'info, Karma>,
+    pub reporter: Account<'info, Soul>,
 }
 
 const ENERGY_PER_SUNRISE: u16 = 2400;
@@ -116,9 +117,9 @@ const SECONDS_PER_DAY: i64 = 86400;
 
 #[account]
 #[derive(Default)]
-pub struct Karma {
+pub struct Soul {
     pub authority: Pubkey,
-    pub balance: i64,
+    pub karma: i64,
     pub energy: u16,
     pub sunrise: i64,
 }
@@ -129,5 +130,5 @@ pub struct Sunrise<'info> {
         mut,
         signer,
     )]
-    pub karma: Account<'info, Karma>,
+    pub soul: Account<'info, Soul>,
 }
